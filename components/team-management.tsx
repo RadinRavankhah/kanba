@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/select';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { useUser } from '@/components/user-provider';
 import { 
   Users, 
   Plus, 
@@ -67,6 +68,7 @@ interface TeamManagementProps {
 }
 
 export function TeamManagement({ projectId, userSubscriptionStatus, isProjectOwner }: TeamManagementProps) {
+  const { user } = useUser();
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
@@ -151,8 +153,8 @@ export function TeamManagement({ projectId, userSubscriptionStatus, isProjectOwn
       console.log('🔍 Search profiles via RPC:', { searchProfiles, error: searchError });
       
       // Get current user info
-      const { data: { user }, error: currentUserError } = await supabase.auth.getUser();
-      console.log('🔐 Current user:', { user: user?.email, error: currentUserError });
+      const currentUserId = user?.id;
+      console.log('🔐 Current user:', { user: user?.email });
       
       // Check RLS policies
       const { data: rlsTest, error: rlsError } = await supabase
@@ -295,7 +297,7 @@ export function TeamManagement({ projectId, userSubscriptionStatus, isProjectOwn
           project_id: projectId,
           user_id: existingUser.id,
           role: inviteRole,
-          invited_by: (await supabase.auth.getUser()).data.user?.id,
+          invited_by: user?.id,
           joined_at: new Date().toISOString(),
         });
 

@@ -1,20 +1,22 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { signToken, verifyToken, getTokenFromStorage, setTokenInStorage, removeTokenFromStorage, type AuthTokenPayload } from '@/lib/auth';
 
-// User context
 interface User {
   id: string;
   email: string;
   full_name?: string;
   avatar_url?: string;
+  subscription_status?: 'free' | 'pro' | null;
 }
 
 interface UserContextType {
   user: User | null;
   loading: boolean;
+  login: (token: string, user: User) => void;
   signOut: () => Promise<void>;
+  isAuthenticated: boolean;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -30,75 +32,49 @@ export function useUser() {
 export function UserProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    // Get initial user
-    const getInitialUser = async () => {
+    const checkAuth = async () => {
       try {
-        // Check if Supabase is properly initialized
-        if (!supabase.auth) {
-          console.warn('Supabase auth not initialized');
-          setInitialized(true);
+        const token = getTokenFromStorage();
+        if (!token) {
           setLoading(false);
           return;
         }
-        
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
+
+        const payload = await verifyToken(token);
+        if (payload) {
           setUser({
-            id: user.id,
-            email: user.email || '',
-            full_name: user.user_metadata?.full_name,
-            avatar_url: user.user_metadata?.avatar_url,
+            id: payload.userId,
+            email: payload.email,
           });
-          // If user exists, we can stop loading immediately for dashboard pages
-          setLoading(false);
+        } else {
+          removeTokenFromStorage();
         }
       } catch (error) {
-        console.error('Error getting initial user:', error);
+        console.error('Auth check error:', error);
+        removeTokenFromStorage();
       } finally {
-        setInitialized(true);
+        setLoading(false);
       }
     };
 
-    getInitialUser();
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (session?.user) {
-          setUser({
-            id: session.user.id,
-            email: session.user.email || '',
-            full_name: session.user.user_metadata?.full_name,
-            avatar_url: session.user.user_metadata?.avatar_url,
-          });
-        } else {
-          setUser(null);
-        }
-        setLoading(false);
-      }
-    );
-
-    return () => subscription.unsubscribe();
+    checkAuth();
   }, []);
 
-  // Only show loading until auth listener is set up, or until we have user data
-  const isLoading = (!initialized && !user) || (loading && !user);
+  const login = useCallback((token: string, userData: User) => {
+    setTokenInStorage(token);
+    setUser(userData);
+  }, []);
 
-  const signOut = async () => {
-    try {
-      await supabase.auth.signOut();
-      setUser(null);
-    } catch (error) {
-      console.error('Sign out error:', error);
-    }
-  };
+  const signOut = useCallback(async () => {
+    removeTokenFromStorage();
+    setUser(null);
+  }, []);
 
   return (
-    <UserContext.Provider value={{ user, loading: isLoading, signOut }}>
+    <UserContext.Provider value={{ user, loading, login, signOut, isAuthenticated: !!user }}>
       {children}
     </UserContext.Provider>
   );
-} 
+}

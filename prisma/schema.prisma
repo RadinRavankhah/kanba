@@ -54,6 +54,7 @@ model Profile {
   email               String             @unique
   full_name           String?
   avatar_url          String?
+  password_hash       String?
   subscription_status SubscriptionStatus @default(free)
   stripe_customer_id  String?
   created_at          DateTime           @default(now())

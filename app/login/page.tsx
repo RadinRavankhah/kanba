@@ -8,12 +8,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { Kanban, Loader2 } from 'lucide-react';
-import Image from 'next/image'; 
+import Image from 'next/image';
 import { useTheme } from 'next-themes';
 import { ShineBorder } from '@/src/components/magicui/shine-border';
+import { useUser } from '@/components/user-provider';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -22,13 +22,13 @@ export default function LoginPage() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const router = useRouter();
   const { theme, setTheme } = useTheme();
+  const { login } = useUser();
 
   useEffect(() => {
-    // Check if user is already logged in
     const checkAuth = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
+        const res = await fetch('/api/auth/me');
+        if (res.ok) {
           router.push('/dashboard');
           return;
         }
@@ -47,36 +47,22 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
       });
 
-      if (error) {
-        toast.error(error.message);
-      } else {
-        toast.success('Welcome back!');
-        router.push('/dashboard');
-      }
-    } catch (error) {
-      toast.error('An unexpected error occurred');
-    } finally {
-      setLoading(false);
-    }
-  };
+      const data = await res.json();
 
-  const handleOAuthSignIn = async (provider: 'google' | 'github') => {
-    setLoading(true);
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: `${window.location.origin}/dashboard`,
-        },
-      });
-      if (error) {
-        toast.error(error.message);
+      if (!res.ok) {
+        toast.error(data.error || 'Login failed');
+        return;
       }
+
+      login(data.token, data.user);
+      toast.success('Welcome back!');
+      router.push('/dashboard');
     } catch (error) {
       toast.error('An unexpected error occurred');
     } finally {
@@ -112,28 +98,6 @@ export default function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col gap-2 mb-4">
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full flex items-center justify-center gap-2"
-              onClick={() => handleOAuthSignIn('google')}
-              disabled={loading}
-            >
-              <Image src="/google.svg" alt="Google" width={20} height={20} />
-              Sign in with Google
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full flex items-center justify-center gap-2"
-              onClick={() => handleOAuthSignIn('github')}
-              disabled={loading}
-            >
-              <Image src="/github.svg" alt="GitHub" width={20} height={20} className="dark: invert"/>
-              Sign in with GitHub
-            </Button>
-          </div>
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>

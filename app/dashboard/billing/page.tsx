@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { useUser } from '@/components/user-provider';
 import { stripeProducts } from '@/src/stripe-config';
 import { toast } from 'sonner';
+import { getTokenFromStorage } from '@/lib/auth';
 import { 
   Crown, 
   CreditCard, 
@@ -96,22 +97,17 @@ export default function BillingPage() {
     try {
       console.log('🚀 Starting checkout process...');
       
-      // Get current session
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      // Get JWT token from localStorage
+      const token = getTokenFromStorage();
       
-      if (sessionError) {
-        console.error('❌ Session error:', sessionError);
-        throw new Error('Failed to get authentication session');
-      }
-      
-      if (!session) {
-        console.error('❌ No session found');
+      if (!token) {
+        console.error('❌ No auth token found');
         toast.error('Please sign in to continue');
         router.push('/login');
         return;
       }
 
-      console.log('✅ Session found, making checkout request...');
+      console.log('✅ Token found, making checkout request...');
 
       const requestBody = {
         price_id: priceId,
@@ -126,7 +122,7 @@ export default function BillingPage() {
       const response = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${session.access_token}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },

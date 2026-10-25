@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
-import { createClient } from '@supabase/supabase-js';
-
-// Create a Supabase client with service role for server-side operations
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { prisma } from '@/lib/adapters/postgres';
+import { verifyToken } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
@@ -38,26 +33,22 @@ export async function POST(request: NextRequest) {
 
     const token = authHeader.replace('Bearer ', '');
 
-    // Verify the user with the token
-    const { data: { user }, error: getUserError } = await supabaseAdmin.auth.getUser(token);
+    // Verify the user with the JWT token
+    const payload = await verifyToken(token);
 
-    if (getUserError || !user) {
-      console.error('Failed to authenticate user:', getUserError);
+    if (!payload) {
       return NextResponse.json(
         { error: 'Failed to authenticate user' },
         { status: 401 }
       );
     }
 
-    console.log(`🚀 Creating checkout session for user: ${user.id}`);
+    console.log(`🚀 Creating checkout session for user: ${payload.userId}`);
 
     // Check if customer exists in our database
-    const { data: customer, error: getCustomerError } = await supabaseAdmin
-      .from('stripe_customers')
-      .select('customer_id')
-      .eq('user_id', user.id)
-      .is('deleted_at', null)
-      .maybeSingle();
+    const { data: customer, error: getCustomerError } = await prisma.stripeCustomer.findFirst({
+      where: { user_id: payload.userId },
+    });
 
     if (getCustomerError) {
       console.error('Failed to fetch customer information:', getCustomerError);
@@ -71,24 +62,26 @@ export async function POST(request: NextRequest) {
 
     if (!customer || !customer.customer_id) {
       // Create new Stripe customer
-      console.log(`👤 Creating new Stripe customer for user: ${user.id}`);
+      console.log(`👤 Creating new Stripe customer for user: ${payload.userId}`);
       
+      const profile = await prisma.profile.findUnique({ where: { id: payload.userId } });
+
       const newCustomer = await stripe.customers.create({
-        email: user.email,
+        email: profile?.email || payload.email,
         metadata: {
-          userId: user.id,
+          userId: payload.userId,
         },
       });
 
       console.log(`✅ Created Stripe customer: ${newCustomer.id}`);
 
       // Save customer mapping in database
-      const { error: createCustomerError } = await supabaseAdmin
-        .from('stripe_customers')
-        .insert({
-          user_id: user.id,
+      const { error: createCustomerError } = await prisma.stripeCustomer.create({
+        data: {
+          user_id: payload.userId,
           customer_id: newCustomer.id,
-        });
+        },
+      });
 
       if (createCustomerError) {
         console.error('Failed to save customer mapping:', createCustomerError);
@@ -108,12 +101,12 @@ export async function POST(request: NextRequest) {
 
       // Create subscription record if needed
       if (mode === 'subscription') {
-        const { error: createSubscriptionError } = await supabaseAdmin
-          .from('stripe_subscriptions')
-          .insert({
+        const { error: createSubscriptionError } = await prisma.stripeSubscription.create({
+          data: {
             customer_id: newCustomer.id,
             status: 'not_started',
-          });
+          },
+        });
 
         if (createSubscriptionError) {
           console.error('Failed to create subscription record:', createSubscriptionError);
@@ -131,14 +124,12 @@ export async function POST(request: NextRequest) {
 
       // Ensure subscription record exists for existing customer
       if (mode === 'subscription') {
-        const { data: subscription, error: getSubscriptionError } = await supabaseAdmin
-          .from('stripe_subscriptions')
-          .select('status')
-          .eq('customer_id', customerId)
-          .maybeSingle();
+        const subscription = await prisma.stripeSubscription.findUnique({
+          where: { customer_id: customerId },
+        });
 
-        if (getSubscriptionError) {
-          console.error('Failed to fetch subscription:', getSubscriptionError);
+        if (getCustomerError) {
+          console.error('Failed to fetch subscription:', getCustomerError);
           return NextResponse.json(
             { error: 'Failed to fetch subscription information' },
             { status: 500 }
@@ -146,12 +137,12 @@ export async function POST(request: NextRequest) {
         }
 
         if (!subscription) {
-          const { error: createSubscriptionError } = await supabaseAdmin
-            .from('stripe_subscriptions')
-            .insert({
+          const { error: createSubscriptionError } = await prisma.stripeSubscription.create({
+            data: {
               customer_id: customerId,
               status: 'not_started',
-            });
+            },
+          });
 
           if (createSubscriptionError) {
             console.error('Failed to create subscription record:', createSubscriptionError);
@@ -181,7 +172,7 @@ export async function POST(request: NextRequest) {
       success_url,
       cancel_url,
       metadata: {
-        userId: user.id,
+        userId: payload.userId,
       },
     });
 

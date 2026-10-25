@@ -30,6 +30,36 @@ export type PostgresDatabase = {
     update: (data: Database['public']['Tables']['tasks']['Update']) => Promise<{ data: Database['public']['Tables']['tasks']['Row'] | null; error: any }>;
     delete: () => Promise<{ data: any; error: any }>;
   };
+  project_members: {
+    select: (columns?: string) => PostgresQueryBuilder<any>;
+    insert: (data: any) => Promise<{ data: any; error: any }>;
+    update: (data: any) => Promise<{ data: any; error: any }>;
+    delete: () => Promise<{ data: any; error: any }>;
+  };
+  task_comments: {
+    select: (columns?: string) => PostgresQueryBuilder<any>;
+    insert: (data: any) => Promise<{ data: any; error: any }>;
+    update: (data: any) => Promise<{ data: any; error: any }>;
+    delete: () => Promise<{ data: any; error: any }>;
+  };
+  activity_logs: {
+    select: (columns?: string) => PostgresQueryBuilder<any>;
+    insert: (data: any) => Promise<{ data: any; error: any }>;
+    update: (data: any) => Promise<{ data: any; error: any }>;
+    delete: () => Promise<{ data: any; error: any }>;
+  };
+  notifications: {
+    select: (columns?: string) => PostgresQueryBuilder<any>;
+    insert: (data: any) => Promise<{ data: any; error: any }>;
+    update: (data: any) => Promise<{ data: any; error: any }>;
+    delete: () => Promise<{ data: any; error: any }>;
+  };
+  bookmarks: {
+    select: (columns?: string) => PostgresQueryBuilder<any>;
+    insert: (data: any) => Promise<{ data: any; error: any }>;
+    update: (data: any) => Promise<{ data: any; error: any }>;
+    delete: () => Promise<{ data: any; error: any }>;
+  };
 };
 
 // Query builder class to mimic Supabase's query interface
@@ -266,6 +296,161 @@ export const postgresAdapter: PostgresDatabase = {
     delete: async () => {
       try {
         const result = await prisma.task.deleteMany();
+        return { data: result, error: null };
+      } catch (error) {
+        return { data: null, error };
+      }
+    },
+  },
+  project_members: {
+    select: (columns?: string) => new PostgresQueryBuilderWithInclude<any>('project_members'),
+    insert: async (data) => {
+      try {
+        const result = await prisma.projectMember.create({ data });
+        return { data: result as any, error: null };
+      } catch (error) {
+        return { data: null, error };
+      }
+    },
+    update: async (data) => {
+      try {
+        const { id, ...updateData } = data;
+        const result = await prisma.projectMember.update({
+          where: { id: id! },
+          data: updateData,
+        });
+        return { data: result as any, error: null };
+      } catch (error) {
+        return { data: null, error };
+      }
+    },
+    delete: async () => {
+      try {
+        const result = await prisma.projectMember.deleteMany();
+        return { data: result, error: null };
+      } catch (error) {
+        return { data: null, error };
+      }
+    },
+  },
+  task_comments: {
+    select: (columns?: string) => new PostgresQueryBuilderWithInclude<any>('task_comments'),
+    insert: async (data) => {
+      try {
+        const result = await prisma.taskComment.create({ data });
+        return { data: result as any, error: null };
+      } catch (error) {
+        return { data: null, error };
+      }
+    },
+    update: async (data) => {
+      try {
+        const { id, ...updateData } = data;
+        const result = await prisma.taskComment.update({
+          where: { id: id! },
+          data: updateData,
+        });
+        return { data: result as any, error: null };
+      } catch (error) {
+        return { data: null, error };
+      }
+    },
+    delete: async () => {
+      try {
+        const result = await prisma.taskComment.deleteMany();
+        return { data: result, error: null };
+      } catch (error) {
+        return { data: null, error };
+      }
+    },
+  },
+  activity_logs: {
+    select: (columns?: string) => new PostgresQueryBuilderWithInclude<any>('activity_logs'),
+    insert: async (data) => {
+      try {
+        const result = await prisma.activityLog.create({ data });
+        return { data: result as any, error: null };
+      } catch (error) {
+        return { data: null, error };
+      }
+    },
+    update: async (data) => {
+      try {
+        const { id, ...updateData } = data;
+        const result = await prisma.activityLog.update({
+          where: { id: id! },
+          data: updateData,
+        });
+        return { data: result as any, error: null };
+      } catch (error) {
+        return { data: null, error };
+      }
+    },
+    delete: async () => {
+      try {
+        const result = await prisma.activityLog.deleteMany();
+        return { data: result, error: null };
+      } catch (error) {
+        return { data: null, error };
+      }
+    },
+  },
+  notifications: {
+    select: (columns?: string) => new PostgresQueryBuilderWithInclude<any>('notifications'),
+    insert: async (data) => {
+      try {
+        const result = await prisma.notification.create({ data });
+        return { data: result as any, error: null };
+      } catch (error) {
+        return { data: null, error };
+      }
+    },
+    update: async (data) => {
+      try {
+        const { id, ...updateData } = data;
+        const result = await prisma.notification.update({
+          where: { id: id! },
+          data: updateData,
+        });
+        return { data: result as any, error: null };
+      } catch (error) {
+        return { data: null, error };
+      }
+    },
+    delete: async () => {
+      try {
+        const result = await prisma.notification.deleteMany();
+        return { data: result, error: null };
+      } catch (error) {
+        return { data: null, error };
+      }
+    },
+  },
+  bookmarks: {
+    select: (columns?: string) => new PostgresQueryBuilderWithInclude<any>('bookmarks'),
+    insert: async (data) => {
+      try {
+        const result = await prisma.bookmark.create({ data });
+        return { data: result as any, error: null };
+      } catch (error) {
+        return { data: null, error };
+      }
+    },
+    update: async (data) => {
+      try {
+        const { id, ...updateData } = data;
+        const result = await prisma.bookmark.update({
+          where: { id: id! },
+          data: updateData,
+        });
+        return { data: result as any, error: null };
+      } catch (error) {
+        return { data: null, error };
+      }
+    },
+    delete: async () => {
+      try {
+        const result = await prisma.bookmark.deleteMany();
         return { data: result, error: null };
       } catch (error) {
         return { data: null, error };

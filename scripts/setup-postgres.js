@@ -89,7 +89,7 @@ try {
   console.log('\nSUCCESS: PostgreSQL setup completed successfully!');
   console.log('\nNext steps:');
   console.log('1. Start your development server: npm run dev');
-  console.log('2. Visit http://localhost:3000');
+  console.log('2. Visit http://localhost:3001');
   console.log('3. Create your first project');
 
 } catch (error) {

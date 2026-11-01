@@ -40,7 +40,7 @@ import {
 import { TeamManagement } from '@/components/team-management';
 import { TaskComments } from '@/components/task-comments';
 import { ActivityFeed } from '@/components/activity-feed';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/data-client';
 import { useUser } from '@/components/user-provider';
 import { toast } from 'sonner';
 import { 
@@ -62,16 +62,13 @@ import {
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import type { DropResult } from '@hello-pangea/dnd';
-import { nanoid } from 'nanoid';
 
 const KanbanBoard = dynamic(() => import('@/components/kanban-board').then(mod => mod.KanbanBoard), {
   ssr: false,
   loading: () => <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>
 });
 
-import type { Project as ProjectBase, Profile, Column, Task, ProjectMember } from '@/lib/types';
-
-type Project = ProjectBase & { public_share_token?: string };
+import type { Project, Profile, Column, Task, ProjectMember } from '@/lib/types';
 
 
 export default function ProjectPage() {
@@ -133,17 +130,11 @@ export default function ProjectPage() {
 
   const checkUser = async () => {
     if (!user) return;
-    
+
     try {
-      // Get user profile
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-      
+      const { data: profile } = await api.getProfile();
       setProfile(profile);
-      
+
       await loadProject();
     } catch (error) {
       console.error('Error:', error);
@@ -155,55 +146,14 @@ export default function ProjectPage() {
 
   const loadProject = async () => {
     try {
-      // Get project by slug
-      const { data: project, error: projectError } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('slug', projectId)
-        .single();
-
+      const { data: projectDetails, error: projectError } = await api.getProjectBySlug(projectId);
       if (projectError) throw projectError;
-      setProject(project);
+      if (!projectDetails) throw new Error('Project not found');
 
-      // Load project members
-      await loadProjectMembers();
-
-      // Get columns with tasks
-      const { data: columns, error: columnsError } = await supabase
-        .from('columns')
-        .select('*')
-        .eq('project_id', project?.id)
-        .order('position');
-
-      if (columnsError) throw columnsError;
-
-      // Get tasks for each column with assigned user info
-      const columnsWithTasks = await Promise.all(
-        columns.map(async (column) => {
-          const { data: tasks, error: tasksError } = await supabase
-            .from('tasks')
-            .select(`
-              *,
-              profiles:assigned_to (
-                id,
-                email,
-                full_name,
-                avatar_url
-              )
-            `)
-            .eq('column_id', column.id)
-            .order('position');
-
-          if (tasksError) throw tasksError;
-
-          return {
-            ...column,
-            tasks: tasks || [],
-          };
-        })
-      );
-
-      setColumns(columnsWithTasks);
+      const { columns: projectColumns, ...projectData } = projectDetails;
+      setProject(projectData);
+      setColumns(projectColumns);
+      await loadProjectMembers(projectData.id);
     } catch (error: any) {
       console.error('Error loading project:', error);
       toast.error('Failed to load project');
@@ -211,21 +161,9 @@ export default function ProjectPage() {
     }
   };
 
-  const loadProjectMembers = async () => {
+  const loadProjectMembers = async (id: string) => {
     try {
-      const { data: members, error } = await supabase
-        .from('project_members')
-        .select(`
-          *,
-          profiles:user_id (
-            id,
-            email,
-            full_name,
-            avatar_url
-          )
-        `)
-        .eq('project_id', project?.id);
-
+      const { data: members, error } = await api.listMembers(id);
       if (error) throw error;
       setProjectMembers(members || []);
     } catch (error: any) {
@@ -253,21 +191,15 @@ export default function ProjectPage() {
       const column = columns.find(c => c.id === selectedColumnId);
       const nextPosition = column ? column.tasks.length : 0;
 
-      const { data: task, error } = await supabase
-        .from('tasks')
-        .insert({
-          title: taskTitle.trim(),
-          description: taskDescription.trim() || null,
-          column_id: selectedColumnId,
-          position: nextPosition,
-          priority: taskPriority,
-          due_date: taskDueDate || null,
-          assigned_to: taskAssignedTo || null, // FIXED: Use null instead of empty string
-          created_by: user!.id,
-          updated_by: user!.id,
-        })
-        .select()
-        .single();
+      const { error } = await api.createTask({
+        title: taskTitle.trim(),
+        description: taskDescription.trim() || null,
+        column_id: selectedColumnId,
+        position: nextPosition,
+        priority: taskPriority,
+        due_date: taskDueDate || null,
+        assigned_to: taskAssignedTo || null,
+      });
 
       if (error) throw error;
 
@@ -298,18 +230,14 @@ export default function ProjectPage() {
     setCreating(true);
 
     try {
-      const { error } = await supabase
-        .from('tasks')
-        .update({
-          title: taskTitle.trim(),
-          description: taskDescription.trim() || null,
-          column_id: selectedColumnId,
-          priority: taskPriority,
-          due_date: taskDueDate || null,
-          assigned_to: taskAssignedTo || null, // FIXED: Use null instead of empty string
-          updated_by: user!.id,
-        })
-        .eq('id', editingTask.id);
+      const { error } = await api.updateTask(editingTask.id, {
+        title: taskTitle.trim(),
+        description: taskDescription.trim() || null,
+        column_id: selectedColumnId,
+        priority: taskPriority,
+        due_date: taskDueDate || null,
+        assigned_to: taskAssignedTo || null,
+      });
 
       if (error) throw error;
 
@@ -336,10 +264,7 @@ export default function ProjectPage() {
     }
 
     try {
-      const { error } = await supabase
-        .from('tasks')
-        .delete()
-        .eq('id', taskId);
+      const { error } = await api.deleteTask(taskId);
 
       if (error) throw error;
 
@@ -353,13 +278,7 @@ export default function ProjectPage() {
 
   const handleToggleDone = async (taskId: string, isDone: boolean) => {
     try {
-      const { error } = await supabase
-        .from('tasks')
-        .update({
-          is_done: isDone,
-          updated_by: user!.id,
-        })
-        .eq('id', taskId);
+      const { error } = await api.updateTask(taskId, { is_done: isDone });
 
       if (error) throw error;
 
@@ -384,17 +303,7 @@ export default function ProjectPage() {
     try {
       const nextPosition = columns.length;
 
-      const { data: column, error } = await supabase
-        .from('columns')
-        .insert({
-          name: columnName.trim(),
-          project_id: project?.id,
-          position: nextPosition,
-          created_by: user!.id,
-          updated_by: user!.id,
-        })
-        .select()
-        .single();
+      const { error } = await api.createColumn(project!.id, columnName.trim(), nextPosition);
 
       if (error) throw error;
 
@@ -425,13 +334,7 @@ export default function ProjectPage() {
     setCreating(true);
 
     try {
-      const { error } = await supabase
-        .from('columns')
-        .update({
-          name: columnName.trim(),
-          updated_by: user!.id,
-        })
-        .eq('id', editingColumn.id);
+      const { error } = await api.renameColumn(editingColumn.id, columnName.trim());
 
       if (error) throw error;
 
@@ -454,10 +357,7 @@ export default function ProjectPage() {
 
   const handleDeleteColumn = async (columnId: string) => {
     try {
-      const { error } = await supabase
-        .from('columns')
-        .delete()
-        .eq('id', columnId);
+      const { error } = await api.deleteColumn(columnId);
 
       if (error) throw error;
 
@@ -480,14 +380,11 @@ export default function ProjectPage() {
     try {
       const newSlug = generateSlug(projectName);
       
-      const { error } = await supabase
-        .from('projects')
-        .update({
-          name: projectName.trim(),
-          description: projectDescription.trim() || null,
-          slug: newSlug,
-        })
-        .eq('id', project.id);
+      const { error } = await api.updateProject(project.id, {
+        name: projectName.trim(),
+        description: projectDescription.trim() || null,
+        slug: newSlug,
+      });
 
       if (error) throw error;
 
@@ -513,38 +410,7 @@ export default function ProjectPage() {
 
     setDeletingProject(true);
     try {
-      // First, delete all tasks in the project (using .in() for multiple column IDs)
-      if (columns.length > 0) {
-        const columnIds = columns.map(col => col.id);
-        const { error: tasksError } = await supabase
-          .from('tasks')
-          .delete()
-          .in('column_id', columnIds);
-
-        if (tasksError) throw tasksError;
-      }
-
-      // Then, delete all columns in the project
-      const { error: columnsError } = await supabase
-        .from('columns')
-        .delete()
-        .eq('project_id', project.id);
-
-      if (columnsError) throw columnsError;
-
-      // Delete project members
-      const { error: membersError } = await supabase
-        .from('project_members')
-        .delete()
-        .eq('project_id', project.id);
-
-      if (membersError) throw membersError;
-
-      // Finally, delete the project
-      const { error: projectError } = await supabase
-        .from('projects')
-        .delete()
-        .eq('id', project.id);
+      const { error: projectError } = await api.deleteProject(project.id);
 
       if (projectError) throw projectError;
 
@@ -635,15 +501,12 @@ export default function ProjectPage() {
     if (!project) return;
     let token = project.public_share_token;
     if (!token) {
-      token = nanoid(16);
-      const { error } = await supabase
-        .from('projects')
-        .update({ public_share_token: token })
-        .eq('id', project.id);
-      if (error) {
+      const { data: createdToken, error } = await api.ensureShareToken(project.id);
+      if (error || !createdToken) {
         toast.error('Error creating share link.');
         return;
       }
+      token = createdToken;
       setProject({ ...project, public_share_token: token });
     }
     setShareUrl(`${window.location.origin}/share/${token}`);
@@ -697,13 +560,10 @@ export default function ProjectPage() {
       );
 
       // Update database
-      const updatePromises = newTasks.map((task, index) =>
-        supabase
-          .from('tasks')
-          .update({ position: index, updated_by: user!.id })
-          .eq('id', task.id)
+      const { error } = await api.setTaskPositions(
+        newTasks.map((task, index) => ({ id: task.id, position: index }))
       );
-      await Promise.all(updatePromises);
+      if (error) throw error;
       toast.success('Task reordered!');
 
     } else {
@@ -730,33 +590,17 @@ export default function ProjectPage() {
       
       // Update database
       try {
-        // 1. Update moved task's column and position
-        await supabase
-          .from('tasks')
-          .update({
-            column_id: destination.droppableId,
-            position: destination.index,
-            updated_by: user!.id
-          })
-          .eq('id', draggableId);
+        const updates = new Map<string, { id: string; position: number; column_id?: string }>();
+        updates.set(draggableId, {
+          id: draggableId,
+          column_id: destination.droppableId,
+          position: destination.index,
+        });
+        startTasks.forEach((task, index) => updates.set(task.id, { id: task.id, position: index }));
+        finishTasks.forEach((task, index) => updates.set(task.id, { id: task.id, position: index }));
 
-        // 2. Update positions in the source column
-        const sourceUpdatePromises = startTasks.map((task, index) =>
-          supabase
-            .from('tasks')
-            .update({ position: index, updated_by: user!.id })
-            .eq('id', task.id)
-        );
-
-        // 3. Update positions in the destination column
-        const finishUpdatePromises = finishTasks.map((task, index) =>
-          supabase
-            .from('tasks')
-            .update({ position: index, updated_by: user!.id })
-            .eq('id', task.id)
-        );
-
-        await Promise.all([...sourceUpdatePromises, ...finishUpdatePromises]);
+        const { error } = await api.setTaskPositions(Array.from(updates.values()));
+        if (error) throw error;
         toast.success('Task moved to new column!');
       } catch (error) {
         console.error("Error moving task:", error);

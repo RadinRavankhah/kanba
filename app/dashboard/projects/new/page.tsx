@@ -11,14 +11,8 @@ import { useUser } from '@/components/user-provider';
 import { toast } from 'sonner';
 import { ArrowLeft, Loader2, Plus } from 'lucide-react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
-
-interface Profile {
-  id: string;
-  email: string;
-  full_name: string | null;
-  subscription_status: 'free' | 'pro' | null;
-}
+import { api } from '@/lib/data-client';
+import type { Profile } from '@/lib/types';
 
 export default function NewProjectPage() {
   const { user, signOut } = useUser();
@@ -47,21 +41,12 @@ export default function NewProjectPage() {
     if (!user) return;
     
     try {
-      // Get user profile
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-      
-      setProfile(profile);
+      const [{ data: profile }, { data: count }] = await Promise.all([
+        api.getProfile(),
+        api.countOwnedProjects(),
+      ]);
 
-      // Get project count
-      const { count } = await supabase
-        .from('projects')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id);
-      
+      setProfile(profile);
       setProjectCount(count || 0);
     } catch (error) {
       console.error('Error:', error);
@@ -101,21 +86,9 @@ export default function NewProjectPage() {
 
     setCheckingSlug(true);
     try {
-      const { data, error } = await supabase
-        .from('projects')
-        .select('id')
-        .eq('slug', slug.trim())
-        .single();
-
-      if (error && error.code === 'PGRST116') {
-        // No rows returned - slug is available
-        setSlugAvailable(true);
-      } else if (data) {
-        // Slug exists
-        setSlugAvailable(false);
-      } else {
-        setSlugAvailable(false);
-      }
+      const { data: taken, error } = await api.isSlugTaken(slug.trim());
+      if (error) throw error;
+      setSlugAvailable(!taken);
     } catch (error) {
       console.error('Error checking slug:', error);
       setSlugAvailable(false);
@@ -173,37 +146,15 @@ export default function NewProjectPage() {
     setCreating(true);
 
     try {
-      // Create project
-      const { data: project, error: projectError } = await supabase
-        .from('projects')
-        .insert({
-          name: projectName,
-          description: projectDescription || null,
-          slug: projectSlug.trim(),
-          user_id: user!.id,
-        })
-        .select()
-        .single();
+      const { data: project, error: projectError } = await api.createProject({
+        name: projectName,
+        description: projectDescription || null,
+        slug: projectSlug.trim(),
+        columns: ['To Do', 'In Progress', 'Done'],
+      });
 
       if (projectError) throw projectError;
-
-      // Create default columns
-      const defaultColumns = [
-        { name: 'To Do', position: 0 },
-        { name: 'In Progress', position: 1 },
-        { name: 'Done', position: 2 },
-      ];
-
-      const { error: columnsError } = await supabase
-        .from('columns')
-        .insert(
-          defaultColumns.map(col => ({
-            ...col,
-            project_id: project.id,
-          }))
-        );
-
-      if (columnsError) throw columnsError;
+      if (!project) throw new Error('Failed to create project');
 
       // Notify sidebar to update
       if ((window as any).handleProjectUpdate) {

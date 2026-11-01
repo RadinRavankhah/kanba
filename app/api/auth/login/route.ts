@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/adapters/postgres';
-import { hashPassword, comparePassword, signToken } from '@/lib/auth';
+import { getDb } from '@/lib/db';
+import { comparePassword, signToken } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
     }
 
-    const user = await prisma.profile.findUnique({ where: { email } });
+    const user = await getDb().server.findUserByEmail(email);
 
     if (!user || !user.password_hash) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });

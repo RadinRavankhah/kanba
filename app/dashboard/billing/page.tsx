@@ -18,23 +18,8 @@ import {
   ExternalLink,
   AlertCircle
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
-
-interface Profile {
-  id: string;
-  email: string;
-  full_name: string | null;
-  subscription_status: 'free' | 'pro' | null;
-}
-
-interface Subscription {
-  subscription_status: string;
-  price_id: string | null;
-  current_period_end: number | null;
-  cancel_at_period_end: boolean;
-  payment_method_brand: string | null;
-  payment_method_last4: string | null;
-}
+import { api } from '@/lib/data-client';
+import type { Profile, SubscriptionInfo as Subscription } from '@/lib/types';
 
 export default function BillingPage() {
   const { user, signOut } = useUser();
@@ -56,22 +41,12 @@ export default function BillingPage() {
     if (!user) return;
     
     try {
-      // Get user profile
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-      
-      setProfile(profile);
+      const [{ data: profile }, { data: subscriptionData }] = await Promise.all([
+        api.getProfile(),
+        api.getSubscription(),
+      ]);
 
-      // Get subscription data
-      const { data: subscriptionData } = await supabase
-        .from('stripe_user_subscriptions')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle();
-      
+      setProfile(profile);
       setSubscription(subscriptionData);
     } catch (error) {
       console.error('Error:', error);
@@ -118,7 +93,6 @@ export default function BillingPage() {
 
       console.log('📦 Request body:', requestBody);
 
-      // Use local API route instead of Supabase Edge Function
       const response = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: {
@@ -199,8 +173,7 @@ export default function BillingPage() {
   };
 
   // Check if required environment variables are present
-  const hasRequiredEnvVars = process.env.NEXT_PUBLIC_SUPABASE_URL && 
-                             process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+  const hasRequiredEnvVars = !!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
 
   if (loading) {
     return (

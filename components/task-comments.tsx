@@ -11,7 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/data-client';
 import { toast } from 'sonner';
 import { 
   MessageSquare, 
@@ -55,19 +55,7 @@ export function TaskComments({ taskId, currentUserId }: TaskCommentsProps) {
 
   const loadComments = async () => {
     try {
-      const { data: comments, error } = await supabase
-        .from('task_comments')
-        .select(`
-          *,
-          profiles:user_id (
-            id,
-            email,
-            full_name,
-            avatar_url
-          )
-        `)
-        .eq('task_id', taskId)
-        .order('created_at', { ascending: true });
+      const { data: comments, error } = await api.listComments(taskId);
 
       if (error) throw error;
       setComments(comments || []);
@@ -90,13 +78,7 @@ export function TaskComments({ taskId, currentUserId }: TaskCommentsProps) {
     setSubmitting(true);
 
     try {
-      const { error } = await supabase
-        .from('task_comments')
-        .insert({
-          task_id: taskId,
-          user_id: currentUserId,
-          content: newComment.trim(),
-        });
+      const { error } = await api.createComment(taskId, newComment.trim());
 
       if (error) throw error;
 
@@ -118,13 +100,7 @@ export function TaskComments({ taskId, currentUserId }: TaskCommentsProps) {
     }
 
     try {
-      const { error } = await supabase
-        .from('task_comments')
-        .update({
-          content: editContent.trim(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', commentId);
+      const { error } = await api.updateComment(commentId, editContent.trim());
 
       if (error) throw error;
 
@@ -144,10 +120,7 @@ export function TaskComments({ taskId, currentUserId }: TaskCommentsProps) {
     }
 
     try {
-      const { error } = await supabase
-        .from('task_comments')
-        .delete()
-        .eq('id', commentId);
+      const { error } = await api.deleteComment(commentId);
 
       if (error) throw error;
 

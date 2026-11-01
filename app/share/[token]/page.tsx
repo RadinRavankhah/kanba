@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useState } from "react";
-import { supabase } from '@/lib/supabase';
 import { KanbanBoard } from '@/components/kanban-board';
 import { useTheme } from 'next-themes';
 import Image from "next/image";
@@ -22,39 +21,25 @@ export default function SharePage({ params }: { params: { token: string } }) {
 
   useEffect(() => {
     async function fetchData() {
-      const { data: project } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('public_share_token', params.token)
-        .single();
-      if (!project) {
+      try {
+        const res = await fetch(`/api/public/share/${params.token}`);
+        if (!res.ok) {
+          setLoading(false);
+          return;
+        }
+        const body = await res.json();
+        const shared = body.data;
+        if (!shared) {
+          setLoading(false);
+          return;
+        }
+        setProject(shared);
+        setColumns(shared.columns || []);
+      } catch (error) {
+        console.error('Error loading shared project:', error);
+      } finally {
         setLoading(false);
-        return;
       }
-      setProject(project);
-
-      const { data: columns } = await supabase
-        .from('columns')
-        .select('*')
-        .eq('project_id', project.id)
-        .order('position');
-      if (!columns) {
-        setLoading(false);
-        return;
-      }
-
-      const columnsWithTasks = await Promise.all(
-        columns.map(async (column: any) => {
-          const { data: tasks } = await supabase
-            .from('tasks')
-            .select('*')
-            .eq('column_id', column.id)
-            .order('position');
-          return { ...column, tasks: tasks || [] };
-        })
-      );
-      setColumns(columnsWithTasks);
-      setLoading(false);
     }
     fetchData();
   }, [params.token]);

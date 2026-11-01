@@ -97,7 +97,6 @@ model Project {
   columns         Column[]
   project_members ProjectMember[]
   activity_logs   ActivityLog[]
-  bookmarks       Bookmark[]
 
   @@map("projects")
 }
@@ -213,16 +212,18 @@ model Notification {
 }
 
 model Bookmark {
-  id         String   @id @default(cuid())
-  user_id    String
-  project_id String
-  created_at DateTime @default(now())
+  id          String   @id @default(cuid())
+  user_id     String
+  url         String
+  title       String?
+  description String?
+  icon_url    String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
 
   // Relations
-  user    Profile @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  user Profile @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
-  @@unique([user_id, project_id])
   @@map("bookmarks")
 }
 

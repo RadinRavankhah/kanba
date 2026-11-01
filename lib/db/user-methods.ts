@@ -1,0 +1,47 @@
+export const USER_METHODS = [
+  'getProfile',
+  'updateFullName',
+  'countOwnedProjects',
+  'listProjects',
+  'listOwnedProjectSummaries',
+  'getProjectBySlug',
+  'getProjectSummaryBySlug',
+  'isSlugTaken',
+  'createProject',
+  'updateProject',
+  'deleteProject',
+  'ensureShareToken',
+  'createColumn',
+  'renameColumn',
+  'deleteColumn',
+  'createTask',
+  'updateTask',
+  'deleteTask',
+  'setTaskPositions',
+  'listAssignedTasks',
+  'listMembers',
+  'findMember',
+  'addMember',
+  'updateMemberRole',
+  'removeMember',
+  'listComments',
+  'createComment',
+  'updateComment',
+  'deleteComment',
+  'listActivity',
+  'listNotifications',
+  'markNotificationRead',
+  'markAllNotificationsRead',
+  'deleteNotification',
+  'listBookmarks',
+  'createBookmark',
+  'deleteBookmark',
+  'getSubscription',
+  'searchUsers',
+] as const;
+
+export type UserMethod = (typeof USER_METHODS)[number];
+
+export function isUserMethod(value: string): value is UserMethod {
+  return (USER_METHODS as readonly string[]).includes(value);
+}

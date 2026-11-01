@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/data-client';
 import { toast } from 'sonner';
 import { 
   Activity, 
@@ -22,7 +22,7 @@ interface ActivityLog {
   id: string;
   action: string;
   entity_type: string;
-  entity_id: string;
+  entity_id: string | null;
   details: any;
   created_at: string;
   user_id: string;
@@ -49,25 +49,7 @@ export function ActivityFeed({ projectId, limit = 20 }: ActivityFeedProps) {
 
   const loadActivities = async () => {
     try {
-      let query = supabase
-        .from('activity_logs')
-        .select(`
-          *,
-          profiles:user_id (
-            id,
-            email,
-            full_name,
-            avatar_url
-          )
-        `)
-        .eq('project_id', projectId)
-        .order('created_at', { ascending: false });
-
-      if (limit) {
-        query = query.limit(limit);
-      }
-
-      const { data: activities, error } = await query;
+      const { data: activities, error } = await api.listActivity(projectId, limit);
 
       if (error) throw error;
       setActivities(activities || []);

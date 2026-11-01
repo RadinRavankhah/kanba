@@ -51,7 +51,7 @@ import {
 import { Notifications } from "@/components/notifications"
 import { useTheme } from "next-themes"
 import Link from "next/link"
-import { supabase } from "@/lib/supabase"
+import { api } from "@/lib/data-client"
 import { Badge } from "@/components/ui/badge"
 import {
   Sidebar,
@@ -114,14 +114,9 @@ export function AppSidebar({ onSignOut, onProjectUpdate }: AppSidebarProps) {
 
   useEffect(() => {
     if (user?.id) {
-      supabase
-        .from('profiles')
-        .select('subscription_status')
-        .eq('id', user.id)
-        .single()
-        .then(({ data }) => {
-          if (data?.subscription_status) setSubscription(data.subscription_status);
-        });
+      api.getProfile().then(({ data }) => {
+        if (data?.subscription_status) setSubscription(data.subscription_status);
+      });
     }
   }, [user?.id]);
 
@@ -174,15 +169,7 @@ export function AppSidebar({ onSignOut, onProjectUpdate }: AppSidebarProps) {
     console.log('Loading projects for user:', user.id);
     setLoadingProjects(true);
     try {
-      // Get projects owned by user
-      const { data: projects, error } = await supabase
-        .from('projects')
-        .select('id, name, slug, user_id')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      console.log('Projects query result:', { projects, error });
+      const { data: projects, error } = await api.listOwnedProjectSummaries(10);
 
       if (error) throw error;
       setProjects(projects || []);

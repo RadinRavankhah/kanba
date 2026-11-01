@@ -28,7 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/data-client';
 import { toast } from 'sonner';
 import { useUser } from '@/components/user-provider';
 import { 
@@ -77,7 +77,6 @@ export function TeamManagement({ projectId, userSubscriptionStatus, isProjectOwn
   const [inviting, setInviting] = useState(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
-  const [debugInfo, setDebugInfo] = useState<any>(null);
 
   useEffect(() => {
     loadMembers();
@@ -85,46 +84,13 @@ export function TeamManagement({ projectId, userSubscriptionStatus, isProjectOwn
 
   const loadMembers = async () => {
     try {
-      const { data: members, error } = await supabase
-        .from('project_members_with_profiles')
-        .select(`
-          id,
-          project_id,
-          user_id,
-          role,
-          created_at,
-          updated_at,
-          profile_id,
-          profile_email,
-          profile_full_name,
-          profile_avatar_url
-        `)
-        .eq('project_id', projectId)
-        .order('created_at');
-
+      const { data: members, error } = await api.listMembers(projectId);
       if (error) throw error;
-      
-      // Transform data to match existing interface
-      const transformedMembers = (members || []).map(member => ({
-        id: member.id,
-        project_id: member.project_id,
-        user_id: member.user_id,
-        role: member.role,
-        created_at: member.created_at,
-        updated_at: member.updated_at,
-        profiles: {
-          id: member.profile_id,
-          email: member.profile_email,
-          full_name: member.profile_full_name,
-          avatar_url: member.profile_avatar_url
-        }
-      }));
-      
-      // Varsayılan değerlerle eksik alanları ekleyerek transformedMembers'ı düzeltiyoruz
-      const completeMembers = transformedMembers.map(member => ({
+
+      const completeMembers = (members || []).map(member => ({
         ...member,
-        invited_at: member.created_at, // invited_at için created_at kullanıyoruz
-        joined_at: member.created_at // joined_at için created_at kullanıyoruz
+        invited_at: member.created_at,
+        joined_at: member.created_at,
       }));
 
       setMembers(completeMembers);
@@ -136,50 +102,6 @@ export function TeamManagement({ projectId, userSubscriptionStatus, isProjectOwn
     }
   };
 
-  const debugUserSearch = async () => {
-    try {
-      console.log('🔍 Starting debug search...');
-      
-      // Test RPC function with generic search
-      const { data: allProfiles, error: allProfilesError } = await supabase
-        .rpc('search_users_for_collaboration', { search_term: 'a' }); // Search for users with 'a'
-      
-      console.log('📊 All profiles via RPC:', { allProfiles, error: allProfilesError });
-      
-      // Test specific search
-      const { data: searchProfiles, error: searchError } = await supabase
-        .rpc('search_users_for_collaboration', { search_term: 'test' });
-      
-      console.log('🔍 Search profiles via RPC:', { searchProfiles, error: searchError });
-      
-      // Get current user info
-      const currentUserId = user?.id;
-      console.log('🔐 Current user:', { user: user?.email });
-      
-      // Check RLS policies
-      const { data: rlsTest, error: rlsError } = await supabase
-        .rpc('get_profiles_count');
-      
-      console.log('🛡️ Profiles count test:', { rlsTest, error: rlsError });
-      
-      setDebugInfo({
-        allProfilesCount: allProfiles?.length || 0,
-        searchProfilesCount: searchProfiles?.length || 0,
-        allProfiles: allProfiles?.slice(0, 3),
-        searchProfiles: searchProfiles?.slice(0, 3),
-        currentUser: user?.email,
-        allProfilesError: allProfilesError?.message,
-        searchError: searchError?.message,
-        rlsError: rlsError?.message
-      });
-      
-      toast.success('Debug info updated! Check console for detailed logs.');
-    } catch (error: any) {
-      console.error('Debug error:', error);
-      toast.error('Debug failed: ' + error.message);
-    }
-  };
-
   const searchUsers = async (email: string) => {
     if (!email.trim() || email.length < 2) {
       setSearchResults([]);
@@ -188,26 +110,15 @@ export function TeamManagement({ projectId, userSubscriptionStatus, isProjectOwn
 
     setSearching(true);
     try {
-      console.log('🔍 Searching for users with term:', email);
-      
-      // Search for users using secure RPC function
-      const { data: users, error } = await supabase
-        .rpc('search_users_for_collaboration', { search_term: email.trim() });
-
-      console.log('📊 Search results:', { users, error, searchTerm: email });
-
-      if (error) {
-        console.error('Search error:', error);
-        throw error;
-      }
+      const { data: users, error } = await api.searchUsers(email.trim());
+      if (error) throw error;
 
       // Filter out users who are already members
       const existingMemberIds = members.map(m => m.user_id);
-      const availableUsers = (users || []).filter((user: { id: string }) => 
+      const availableUsers = (users || []).filter((user) =>
         !existingMemberIds.includes(user.id)
       );
 
-      console.log('✅ Available users after filtering:', availableUsers);
       setSearchResults(availableUsers);
     } catch (error: any) {
       console.error('Error searching users:', error);
@@ -243,16 +154,11 @@ export function TeamManagement({ projectId, userSubscriptionStatus, isProjectOwn
     try {
       console.log('🚀 Attempting to invite user:', inviteEmail);
       
-      // Search for user by exact email match using secure RPC function
-      const { data: users, error: userError } = await supabase
-        .rpc('search_users_for_collaboration', { search_term: inviteEmail.trim() });
-      
-      // Tam eşleşen email adresini sonuçlardan bul
-      const existingUser = users?.find((user: { email: string; id: string }) => 
-        user.email.toLowerCase() === inviteEmail.trim().toLowerCase()
-      ) || null;
+      const { data: users, error: userError } = await api.searchUsers(inviteEmail.trim());
 
-      console.log('👤 Kullanıcı arama sonucu:', { existingUser, error: userError });
+      const existingUser = users?.find((user) =>
+        user.email.toLowerCase() === inviteEmail.trim().toLowerCase()
+      ) ?? null;
 
       if (userError) {
         console.error('User lookup error:', userError);
@@ -271,36 +177,15 @@ export function TeamManagement({ projectId, userSubscriptionStatus, isProjectOwn
         return;
       }
 
-      // RPC function artık profiles'dan arama yaptığı için ek kontrol gerekmez
-
-      // Check if user is already a member
-      const { data: existingMember, error: memberError } = await supabase
-        .from('project_members')
-        .select('id')
-        .eq('project_id', projectId)
-        .eq('user_id', existingUser.id)
-        .single();
-
-      if (memberError && memberError.code !== 'PGRST116') {
-        throw memberError;
-      }
+      const { data: existingMember, error: memberError } = await api.findMember(projectId, existingUser.id);
+      if (memberError) throw memberError;
 
       if (existingMember) {
         toast.error('User is already a member of this project');
         return;
       }
 
-      // Add user as project member
-      const { error: inviteError } = await supabase
-        .from('project_members')
-        .insert({
-          project_id: projectId,
-          user_id: existingUser.id,
-          role: inviteRole,
-          invited_by: user?.id,
-          joined_at: new Date().toISOString(),
-        });
-
+      const { error: inviteError } = await api.addMember(projectId, existingUser.id, inviteRole);
       if (inviteError) throw inviteError;
 
       toast.success(`${existingUser.full_name || existingUser.email} has been added to the project!`);
@@ -327,10 +212,7 @@ export function TeamManagement({ projectId, userSubscriptionStatus, isProjectOwn
     }
 
     try {
-      const { error } = await supabase
-        .from('project_members')
-        .delete()
-        .eq('id', memberId);
+      const { error } = await api.removeMember(memberId);
 
       if (error) throw error;
 
@@ -344,10 +226,7 @@ export function TeamManagement({ projectId, userSubscriptionStatus, isProjectOwn
 
   const handleUpdateRole = async (memberId: string, newRole: 'admin' | 'member', memberName: string) => {
     try {
-      const { error } = await supabase
-        .from('project_members')
-        .update({ role: newRole })
-        .eq('id', memberId);
+      const { error } = await api.updateMemberRole(memberId, newRole);
 
       if (error) throw error;
 
@@ -557,37 +436,6 @@ export function TeamManagement({ projectId, userSubscriptionStatus, isProjectOwn
       </CardHeader>
       <CardContent>
         {/* Team collaboration artık herkese açık */}
-
-        {/* Debug Info Display */}
-        {debugInfo && (
-          <div className="bg-blue-50 dark:bg-blue-950/10 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
-            <h4 className="font-medium text-blue-800 dark:text-blue-200 mb-2">Debug Information</h4>
-            <div className="text-xs text-blue-700 dark:text-blue-300 space-y-1">
-              <p>All profiles count: {debugInfo.allProfilesCount}</p>
-              <p>Search profiles count: {debugInfo.searchProfilesCount}</p>
-              <p>Current user: {debugInfo.currentUser}</p>
-              {debugInfo.allProfilesError && <p className="text-red-600">All profiles error: {debugInfo.allProfilesError}</p>}
-              {debugInfo.searchError && <p className="text-red-600">Search error: {debugInfo.searchError}</p>}
-              {debugInfo.rlsError && <p className="text-red-600">RLS error: {debugInfo.rlsError}</p>}
-              {debugInfo.allProfiles && (
-                <details className="mt-2">
-                  <summary className="cursor-pointer">All profiles sample</summary>
-                  <pre className="mt-1 text-xs bg-blue-100 dark:bg-blue-900 p-2 rounded">
-                    {JSON.stringify(debugInfo.allProfiles, null, 2)}
-                  </pre>
-                </details>
-              )}
-              {debugInfo.searchProfiles && (
-                <details className="mt-2">
-                  <summary className="cursor-pointer">Search profiles sample</summary>
-                  <pre className="mt-1 text-xs bg-blue-100 dark:bg-blue-900 p-2 rounded">
-                    {JSON.stringify(debugInfo.searchProfiles, null, 2)}
-                  </pre>
-                </details>
-              )}
-            </div>
-          </div>
-        )}
 
         <div className="space-y-4">
           {members.map((member) => (

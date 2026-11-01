@@ -13,40 +13,9 @@ import { useUser } from '@/components/user-provider';
 import { toast } from 'sonner';
 import { Plus, FolderOpen, Calendar, Users, Crown, Bell, CheckSquare, User, Sun, Moon } from 'lucide-react';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/data-client';
 import { useTheme } from 'next-themes';
-
-interface Project {
-  id: string;
-  name: string;
-  description: string | null;
-  slug: string;
-  created_at: string;
-  user_id: string;
-  // For shared projects
-  project_members?: {
-    role: string;
-  }[];
-}
-
-interface Profile {
-  id: string;
-  email: string;
-  full_name: string | null;
-  avatar_url: string | null;
-  subscription_status: 'free' | 'pro' | null;
-}
-
-interface TaskAssignment {
-  id: string;
-  title: string;
-  priority: 'low' | 'medium' | 'high';
-  due_date: string | null;
-  project_name: string;
-  project_id: string;
-  project_slug: string;
-  column_name: string;
-}
+import type { Profile, ProjectWithRole as Project, TaskAssignment } from '@/lib/types';
 
 export default function DashboardPage() {
   const { user, signOut } = useUser();
@@ -68,77 +37,17 @@ export default function DashboardPage() {
 
   const checkUser = async () => {
     if (!user) return;
-    
+
     try {
-      // Get user profile
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-      
+      const [{ data: profile }, { data: projects }, { data: tasks }] = await Promise.all([
+        api.getProfile(),
+        api.listProjects(),
+        api.listAssignedTasks(10),
+      ]);
+
       setProfile(profile);
-
-      // Get user projects (both owned and shared)
-      const { data: projects } = await supabase
-        .from('projects')
-        .select(`
-          *,
-          project_members!inner(role)
-        `)
-        .order('created_at', { ascending: false });
-      
       setProjects(projects || []);
-
-      // Get tasks assigned to the user
-      const { data: tasks } = await supabase
-        .from('tasks')
-        .select(`
-          id,
-          title,
-          priority,
-          due_date,
-          column_id
-        `)
-        .eq('assigned_to', user.id)
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      if (tasks) {
-        // Get column and project info for each task
-        const formattedTasks = await Promise.all(
-          tasks.map(async (task: any) => {
-            // Get column info
-            const { data: column } = await supabase
-              .from('columns')
-              .select(`
-                name,
-                project_id
-              `)
-              .eq('id', task.column_id)
-              .single();
-
-            // Get project info
-            const { data: project } = await supabase
-              .from('projects')
-              .select('id, name, slug')
-              .eq('id', column?.project_id)
-              .single();
-
-            return {
-              id: task.id,
-              title: task.title,
-              priority: task.priority,
-              due_date: task.due_date,
-              project_name: project?.name || 'Unknown Project',
-              project_id: project?.id || '',
-              project_slug: project?.slug || '',
-              column_name: column?.name || 'Unknown Column',
-            };
-          })
-        );
-        setAssignedTasks(formattedTasks);
-      }
+      setAssignedTasks(tasks || []);
     } catch (error) {
       console.error('Error:', error);
       toast.error('Failed to load dashboard');

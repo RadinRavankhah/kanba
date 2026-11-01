@@ -2,7 +2,8 @@
 
 import { useUser } from "@/components/user-provider";
 import { useEffect, useState } from "react";
-import { supabase } from '@/lib/supabase';
+import { api } from "@/lib/data-client";
+import type { Bookmark } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import Image from 'next/image';
@@ -24,7 +25,7 @@ async function fetchMeta(url: string) {
 
 export default function BookmarksPage() {
   const { user, loading } = useUser();
-  const [bookmarks, setBookmarks] = useState<any[]>([]);
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [url, setUrl] = useState("");
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState("");
@@ -33,12 +34,7 @@ export default function BookmarksPage() {
 
   useEffect(() => {
     if (!user) return;
-    supabase
-      .from('bookmarks')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .then(({ data }) => setBookmarks(data || []));
+    api.listBookmarks().then(({ data }) => setBookmarks(data || []));
   }, [user]);
 
   async function handleAddBookmark() {
@@ -53,23 +49,18 @@ export default function BookmarksPage() {
     // Metadata çek
     const meta = await fetchMeta(normalizedUrl);
     const { title, icon, description } = meta || {};
-    const { error: insertError, data } = await supabase
-      .from('bookmarks')
-      .insert({
-        user_id: user.id,
-        url: normalizedUrl,
-        title: title || normalizedUrl,
-        icon_url: icon || '',
-        description: description || '',
-      })
-      .select()
-      .single();
+    const { error: insertError, data } = await api.createBookmark({
+      url: normalizedUrl,
+      title: title || normalizedUrl,
+      icon_url: icon || '',
+      description: description || '',
+    });
     setAdding(false);
     if (insertError) {
       setError(insertError.message);
       return;
     }
-    setBookmarks([data, ...bookmarks]);
+    if (data) setBookmarks([data, ...bookmarks]);
     setUrl("");
   }
 
@@ -77,11 +68,7 @@ export default function BookmarksPage() {
     if (!user) return;
     setDeleting(bookmarkId);
     
-    const { error: deleteError } = await supabase
-      .from('bookmarks')
-      .delete()
-      .eq('id', bookmarkId)
-      .eq('user_id', user.id);
+    const { error: deleteError } = await api.deleteBookmark(bookmarkId);
     
     setDeleting(null);
     
@@ -95,8 +82,8 @@ export default function BookmarksPage() {
   }
 
   // Bookmarkları günlere göre gruplandır
-  function groupByDate(bookmarks: any[]) {
-    const groups: Record<string, any[]> = {};
+  function groupByDate(bookmarks: Bookmark[]) {
+    const groups: Record<string, Bookmark[]> = {};
     for (const b of bookmarks) {
       const date = format(new Date(b.created_at), 'd MMMM yyyy');
       if (!groups[date]) groups[date] = [];

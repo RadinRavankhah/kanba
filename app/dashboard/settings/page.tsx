@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Form, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { useForm } from "react-hook-form";
 import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
+import { api } from "@/lib/data-client";
 import { toast } from "sonner";
 
 export default function SettingsPage() {
@@ -27,15 +27,11 @@ export default function SettingsPage() {
     },
   });
 
-  // Settings sayfası her açıldığında Supabase'den güncel profil bilgisini çek
+  // Settings sayfası her açıldığında güncel profil bilgisini çek
   useEffect(() => {
     async function fetchProfile() {
       if (!user?.id) return;
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("full_name")
-        .eq("id", user.id)
-        .single();
+      const { data, error } = await api.getProfile();
       if (!error && data?.full_name) {
         setLocalName(data.full_name);
         form.setValue("full_name", data.full_name);
@@ -47,10 +43,7 @@ export default function SettingsPage() {
 
   async function onSubmit(values: { full_name: string }) {
     setSaving(true);
-    const { error } = await supabase
-      .from("profiles")
-      .update({ full_name: values.full_name })
-      .eq("id", user?.id);
+    const { error } = await api.updateFullName(values.full_name);
     setSaving(false);
     if (error) {
       toast.error("Name update failed: " + error.message);

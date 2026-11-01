@@ -1,6 +1,6 @@
 # PostgreSQL Support for Kanba
 
-Kanba now supports optional PostgreSQL as an alternative to Supabase for local development and self-hosted deployments. This guide will help you set up and use PostgreSQL with Kanba.
+Kanba uses PostgreSQL as its database backend. Database access goes through a provider interface (`lib/db`), so other databases can be added later. This guide will help you set up and use PostgreSQL with Kanba.
 
 ## Quick Start
 
@@ -86,14 +86,12 @@ Copy `env.example` to `.env.local` and configure:
 
 ```env
 # Database Configuration
-DATABASE_PROVIDER=postgresql  # or 'supabase'
-
-# PostgreSQL Configuration
+DATABASE_PROVIDER=postgresql
 DATABASE_URL=postgresql://username:password@localhost:5432/kanba_db
+DIRECT_URL=postgresql://username:password@localhost:5432/kanba_db
 
-# Supabase Configuration (fallback)
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_key
+# Auth
+JWT_SECRET=your_jwt_secret
 ```
 
 ### Connection String Examples
@@ -107,9 +105,6 @@ DATABASE_URL=postgresql://postgres:password@localhost:5432/kanba_db
 
 # Railway PostgreSQL
 DATABASE_URL=postgresql://username:password@host:port/database
-
-# Supabase PostgreSQL
-DATABASE_URL=postgresql://postgres:[password]@[host]:[port]/postgres
 ```
 
 ## Database Setup
@@ -185,41 +180,19 @@ npm run db:migrate
 npm run db:push --force-reset
 ```
 
-## Switching Between Databases
+## Database Providers
 
-### From Supabase to PostgreSQL
+Database access is defined by the `DataProvider` interface in `lib/db/store.ts`. The PostgreSQL provider lives in `lib/db/providers/postgres.ts` and is selected by `DATABASE_PROVIDER` in `lib/db/index.ts`.
 
-1. **Set environment variable:**
-   ```env
-   DATABASE_PROVIDER=postgresql
-   ```
+To add another database:
 
-2. **Configure PostgreSQL connection:**
-   ```env
-   DATABASE_URL=postgresql://...
-   ```
-
-3. **Setup database:**
-   ```bash
-   npm run postgres:setup
-   ```
-
-### From PostgreSQL to Supabase
-
-1. **Set environment variable:**
-   ```env
-   DATABASE_PROVIDER=supabase
-   ```
-
-2. **Configure Supabase:**
-   ```env
-   NEXT_PUBLIC_SUPABASE_URL=...
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-   ```
+1. Implement `DataProvider` under `lib/db/providers/`.
+2. Register it in the `createProvider` switch in `lib/db/index.ts`.
+3. Set `DATABASE_PROVIDER` to the new name.
 
 ## Database Schema
 
-The PostgreSQL schema includes all the same tables as Supabase:
+The PostgreSQL schema includes:
 
 - **profiles** - User profiles and authentication
 - **projects** - Kanban projects
@@ -314,12 +287,11 @@ tail -f /var/log/postgresql/postgresql-*.log
 
 ## Contributing
 
-When contributing to PostgreSQL support:
+When contributing to database support:
 
-1. **Test with both Supabase and PostgreSQL**
-2. **Update database adapter if needed**
-3. **Add new database helpers for complex queries**
-4. **Update this documentation**
+1. **Add new methods to the `DataProvider` interface**
+2. **Implement them in every provider under `lib/db/providers/`**
+3. **Update this documentation**
 
 ## License
 

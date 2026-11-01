@@ -1,6 +1,6 @@
 # Deferred Features
 
-The following features were deferred from the Week 2 auth migration (Supabase Auth → custom JWT auth):
+The following features were deferred from the Week 2 auth migration (legacy hosted auth → custom JWT auth):
 
 ## OAuth (Google / GitHub)
 

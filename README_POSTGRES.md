@@ -1,16 +1,13 @@
 ## Database Support
 
-Kanba supports both **Supabase** (default) and **PostgreSQL** as database backends.
+Kanba talks to the database through a small provider interface (`lib/db`). The active provider is chosen with `DATABASE_PROVIDER`; `postgresql` is the only provider implemented today.
 
-### Quick Database Switch
+### Configuration
 
 ```bash
-# Use Supabase (default)
-DATABASE_PROVIDER=supabase
-
-# Use PostgreSQL
 DATABASE_PROVIDER=postgresql
 DATABASE_URL=postgresql://username:password@localhost:5432/kanba_db
+DIRECT_URL=postgresql://username:password@localhost:5432/kanba_db
 ```
 
 ### PostgreSQL Setup
@@ -39,13 +36,22 @@ DATABASE_URL=postgresql://username:password@localhost:5432/kanba_db
 
 **Full PostgreSQL guide:** [POSTGRES_SETUP.md](./POSTGRES_SETUP.md)
 
+### Switching Databases
+
+All data access goes through the `DataProvider` interface in `lib/db/store.ts`. To add another database:
+
+1. Create a new provider under `lib/db/providers/` implementing `DataProvider`.
+2. Register it in `lib/db/index.ts`.
+3. Set `DATABASE_PROVIDER` to its name.
+
+No page or component needs to change.
+
 ### Database Features
 
-- **Seamless switching** between Supabase and PostgreSQL
-- **Same API** for both databases
+- **Provider interface** decouples features from the database
+- **Server-only access** through `/api/data/[method]`, so credentials never reach the browser
 - **Docker support** for easy local development
 - **Prisma ORM** for PostgreSQL
-- **All existing features** work with both databases
 - **Team collaboration** and **Stripe integration** supported
 
 ### Why PostgreSQL?
@@ -54,4 +60,4 @@ DATABASE_URL=postgresql://username:password@localhost:5432/kanba_db
 - **Self-hosted deployments** with full control
 - **Better performance** for complex queries
 - **Advanced features** like full-text search
-- **Cost-effective** for high-traffic applications 
+- **Cost-effective** for high-traffic applications

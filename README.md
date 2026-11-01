@@ -51,7 +51,7 @@
 # Open-source, lightweight Trello alternative designed for makers and indie hackers.
 
 Focus on simplicity, speed, and scalability.
-Built with modern stack: Tailwind CSS, shadcn/ui, Supabase, Stripe integration.
+Built with modern stack: Tailwind CSS, shadcn/ui, PostgreSQL + Prisma, Stripe integration.
 Supports unlimited projects, team collaboration, dark/light mode, and seamless user experience.
 Perfect for solo devs and small teams who want full control without unnecessary complexity.
 
@@ -60,7 +60,7 @@ Perfect for solo devs and small teams who want full control without unnecessary 
 # Deployment Guide
 
 ## Overview
-This application now uses local Next.js API routes instead of Supabase Edge Functions for Stripe integration. This makes deployment simpler and allows you to use standard .env files for configuration.
+This application uses local Next.js API routes for Stripe integration. This makes deployment simpler and allows you to use standard .env files for configuration.
 
 ## Environment Variables Setup
 
@@ -73,10 +73,11 @@ cp .env.example .env.local
 
 ### 2. Required Environment Variables
 
-#### Supabase Configuration
-- `NEXT_PUBLIC_SUPABASE_URL` - Your Supabase project URL
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Your Supabase anonymous key
-- `SUPABASE_SERVICE_ROLE_KEY` - Your Supabase service role key (server-side only)
+#### Database Configuration
+- `DATABASE_PROVIDER` - Active data provider (`postgresql`)
+- `DATABASE_URL` - PostgreSQL connection string
+- `DIRECT_URL` - Direct PostgreSQL connection string (for migrations)
+- `JWT_SECRET` - Secret used to sign auth tokens
 
 #### Stripe Configuration (optional)
 - `STRIPE_SECRET_KEY` - Your Stripe secret key (server-side only)
@@ -104,7 +105,7 @@ npm run dev
 
 4. Test Stripe webhooks locally using Stripe CLI:
 ```bash
-stripe listen --forward-to localhost:3000/api/stripe/webhook
+stripe listen --forward-to localhost:3001/api/stripe/webhook
 ```
 
 ## Production Deployment
@@ -148,7 +149,7 @@ The application now uses these local API routes:
 2. **Environment Variables:**
    - Ensure all required variables are set
    - Check for typos in variable names
-   - Verify Supabase service role key has proper permissions
+   - Verify PostgreSQL credentials and connection string
 
 3. **CORS Issues:**
    - API routes include proper CORS headers
@@ -156,7 +157,7 @@ The application now uses these local API routes:
 
 ## Security Notes
 
-- Never expose `STRIPE_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY` to the client
+- Never expose `STRIPE_SECRET_KEY`, `DATABASE_URL`, or `JWT_SECRET` to the client
 - Use `NEXT_PUBLIC_` prefix only for client-side variables
 - Regularly rotate your webhook secrets
 - Monitor webhook delivery in Stripe dashboard

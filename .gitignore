@@ -38,6 +38,10 @@ next-env.d.ts
 # prisma
 /prisma/generated
 
+# python
+__pycache__/
+*.pyc
+
 # IDE and editor files
 .cursor/
 .vscode/
